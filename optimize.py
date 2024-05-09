@@ -100,4 +100,15 @@ if __name__ == "__main__":
     costs.append({'seg': data_file.stem, 'controller': 'test', **test_cost})
     costs.append({'seg': data_file.stem, 'controller': 'baseline', **baseline_cost})
 
-  create_report(args.test_controller, args.baseline_controller, sample_rollouts, costs)
+  # print(costs)
+  res = []  
+  res_df = pd.DataFrame(costs)
+  agg_values = res_df.groupby('controller').agg({'lataccel_cost': 'mean', 'jerk_cost': 'mean', 'total_cost': 'mean'}).round(3).reset_index()
+  lat_agg = agg_values.loc[1, 'lataccel_cost']
+  jerk_agg = agg_values.loc[1, 'jerk_cost']
+  challenge_cost = 5 * lat_agg + jerk_agg
+  print(challenge_cost)
+
+
+
+# https://www.linkedin.com/pulse/how-auto-tune-pid-controller-using-scipy-python-library-sarkar/
