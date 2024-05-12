@@ -12,8 +12,6 @@ from tqdm import tqdm
 
 from tinyphysics import TinyPhysicsModel, TinyPhysicsSimulator, CONTROLLERS, CONTROL_START_IDX
 
-from scipy.optimize import minimize, LinearConstraint, OptimizeResult
-
 sns.set_theme()
 SAMPLE_ROLLOUTS = 5
 
@@ -63,7 +61,16 @@ def create_report(test, baseline, sample_rollouts, costs):
     fob.write("\n".join(res))
     print("Report saved to: './report.html'")
 
-def Cost(x, args):
+
+if __name__ == "__main__":
+  parser = argparse.ArgumentParser()
+  parser.add_argument("--model_path", type=str, required=True)
+  parser.add_argument("--data_path", type=str, required=True)
+  parser.add_argument("--num_segs", type=int, default=100)
+  parser.add_argument("--test_controller", default='pid2', choices=CONTROLLERS.keys())
+  parser.add_argument("--baseline_controller", default='simple', choices=CONTROLLERS.keys())
+  args = parser.parse_args()
+
   tinyphysicsmodel = TinyPhysicsModel(args.model_path, debug=False)
   test_controller = CONTROLLERS[args.test_controller]()
   baseline_controller = CONTROLLERS[args.baseline_controller]()
@@ -74,15 +81,9 @@ def Cost(x, args):
   costs = []
   sample_rollouts = []
   files = sorted(data_path.iterdir())[:args.num_segs]
-  kp = x[0]
-  ki = x[1]
-  kd = x[2]
-  t_c = x[3]
-  print(" Kp: " + "{:.3f}".format(kp) + " Ki: " + "{:.3f}".format(ki) + " Kd: " + "{:.3f}".format(kd) + " T_C: " + "{:.3f}".format(t_c))
-  print("")
   for d, data_file in enumerate(tqdm(files, total=len(files))):
     test_sim = TinyPhysicsSimulator(tinyphysicsmodel, str(data_file), controller=test_controller, debug=False)
-    test_sim.tune(kp, ki, kd, t_c)
+    test_sim.tune(0.3, 0.025)
     test_cost = test_sim.rollout()
     baseline_sim = TinyPhysicsSimulator(tinyphysicsmodel, str(data_file), controller=baseline_controller, debug=False)
     baseline_cost = baseline_sim.rollout()
@@ -96,6 +97,7 @@ def Cost(x, args):
         'test_controller_lataccel': test_sim.current_lataccel_history,
         'baseline_controller_lataccel': baseline_sim.current_lataccel_history,
       })
+
     costs.append({'seg': data_file.stem, 'controller': 'test', **test_cost})
     costs.append({'seg': data_file.stem, 'controller': 'baseline', **baseline_cost})
 
@@ -106,34 +108,9 @@ def Cost(x, args):
   lat_agg = agg_values.loc[1, 'lataccel_cost']
   jerk_agg = agg_values.loc[1, 'jerk_cost']
   challenge_cost = 5 * lat_agg + jerk_agg
-
-  print("")
   print("Lat: {:.3f}".format(lat_agg) + " jerk: {:.3f}".format(jerk_agg) + " challenge: {:.3f}".format(challenge_cost))
-  print("")
-  return challenge_cost
 
 
-if __name__ == "__main__":
-  parser = argparse.ArgumentParser()
-  parser.add_argument("--model_path", type=str, required=True)
-  parser.add_argument("--data_path", type=str, required=True)
-  parser.add_argument("--num_segs", type=int, default=100)
-  parser.add_argument("--test_controller", default='pid2', choices=CONTROLLERS.keys())
-  parser.add_argument("--baseline_controller", default='simple', choices=CONTROLLERS.keys())
-  args = parser.parse_args()
 
-  result = []
-  
-  bounds = ((0, 2), (0, 1), (0, 1), (0, 1))
-  r = minimize(Cost, [0.2, 0.01, 0.05, 0.01],
-                args=(args),
-                bounds=bounds)
-  result.append(r)
-
-        # Print optimization results
-
-  print(" Kp: " + "{:.3f}".format(result[0].x[0]) + " Ki: " + "{:.3f}".format(result[0].x[1]) + " Kd: " + "{:.3f}".format(result[0].x[2]) + " T_C: " + "{:.3f}".format(result[0].x[3]))
-  print("")
-  print("Success: " + str(r.success))
 
 # https://www.linkedin.com/pulse/how-auto-tune-pid-controller-using-scipy-python-library-sarkar/

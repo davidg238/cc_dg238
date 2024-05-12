@@ -191,6 +191,12 @@ class TinyPhysicsSimulator:
       plt.ioff()
       plt.show()
     return self.compute_cost()
+  
+  def tune(self, kp, ki, kd, t_c):
+    self.controller.kp = kp
+    self.controller.ki = ki
+    self.controller.kd = kd
+    self.controller.T_C = t_c
 
 
 if __name__ == "__main__":

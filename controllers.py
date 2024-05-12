@@ -86,11 +86,11 @@ class PidController(BaseController):
 import time
 class Pid2Controller(BaseController):
   # controlling the lateral acceleration
-  def __init__(self, kp=0.3, ki=0.025, kd=0.1):
+  def __init__(self, kp=0.2, ki=0.01, kd=0.05, t_c=0.01):
     self.kp = kp
     self.ki = ki
     self.kd = kd
-    self.T_C = 0.1  # Time constant for derivative filtering
+    self.T_C = t_c  # Time constant for derivative filtering
     self.ks = -1 # reverse acting controller
     self.spio =  False # integral action only on SP change
 
@@ -103,8 +103,16 @@ class Pid2Controller(BaseController):
     self.pv_last = 0
     self.out_last = 0
     self.deriv_prev = 0
+    self.deriv_adj_prev = 0
+    self.pv_deriv_last = 0
 
     self.time_last = time.time()
+
+  def tune(self, kp, ki, kd, t_c):
+    self.kp = kp
+    self.ki = ki
+    self.kd = kd
+    self.T_C = t_c
 
   def update(self, sp, pv, state):
     time_now = time.time()
@@ -117,16 +125,22 @@ class Pid2Controller(BaseController):
     else:
       p3 = p1
     proportional = p3 * self.ks * self.kp
-    integral  = dev * self.ks * self.kp * (dT / self.ki)
-    # deriv = (dev - self.dev_last + self.T_C * self.deriv_prev) / (dT + self.T_C)
-    # derivative = deriv * self.kd
-    out_pid = proportional + integral + self.out_last
+    if self.ki != 0:
+      integral  = dev * self.ks * self.kp * (dT / self.ki)
+    else:
+      integral = 0
+    pv_deriv = p2 * self.kd  + self.pv_deriv_last * (self.T_C / (dT + self.T_C))
+    pv_deriv_adj = pv_deriv * self.ks * self.kp
+    deriv = pv_deriv_adj - self.deriv_adj_prev
+    out_pid = proportional + integral + deriv + self.out_last
     out = min( max(self.out_min, out_pid), self.out_max)
     self.pv_last = pv
     self.dev_last = dev
     self.out_last = out
     self.time_last = time_now
-    # self.deriv_prev = deriv
+    self.deriv_prev = deriv
+    self.deriv_adj_prev = pv_deriv_adj
+    self.pv_deriv_last = pv_deriv
 
     return out
 
